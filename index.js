@@ -44,6 +44,7 @@ console.log("Connected to Database:", db.databaseName);
 
 const users = db.collection("users")
 const galleryCollection = db.collection("gallery");
+const eventsCollection = db.collection("events");
 
 
 
@@ -60,6 +61,46 @@ app.get('/gallery', async (req, res) => {
     const cursor = galleryCollection.find();
     const result = await cursor.toArray();
     res.send(result);
+  
+});
+
+//event crete
+
+app.post('/events', async (req, res) => {
+  
+    const newEvent = req.body;
+    
+    // Server-side validation to ensure no past date is accepted
+    const eventDate = new Date(newEvent.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (eventDate <= today) {
+      return res.status(400).send({ success: false, message: "Event date cannot be in the past." });
+    }
+
+    const result = await eventsCollection.insertOne(newEvent);
+    res.send({ success: true, insertedId: result.insertedId });
+    console.log("New event created by:", newEvent.userEmail);
+  } 
+  
+);
+
+// recent_event show
+
+app.get('/events/recent', async (req, res) => {
+ 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    
+    const recentEvents = await db.collection("events")
+      .find({ date: { $gte: today.toISOString().split("T")[0] } })
+      .sort({ date: 1 })
+      .limit(6)
+      .toArray();
+
+    res.send(recentEvents);
   
 });
 
