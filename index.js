@@ -241,6 +241,21 @@ app.put('/events/:id', async (req, res) => {
   
 });
 
+// delete event 
+app.delete('/events/:id', async (req, res) => {
+  
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await db.collection("events").deleteOne(query);
+
+    if (result.deletedCount === 1) {
+      res.send({ success: true, message: "Event deleted successfully" });
+    } else {
+      res.send({ success: false, message: "Event not found" });
+    }
+ 
+});
+
 app.get('/users', async (req, res) => {
   const cursor = users.find();
   const allUsers = await cursor.toArray();
