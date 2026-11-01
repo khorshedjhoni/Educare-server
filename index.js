@@ -218,6 +218,29 @@ app.get('/events/user', async (req, res) => {
   
 });
 
+// PUT (Update) event data by ID
+app.put('/events/:id', async (req, res) => {
+  
+    const id = req.params.id;
+    const updatedData = req.body;
+    const filter = { _id: new ObjectId(id) };
+    
+    const updateDoc = {
+      $set: {
+        title: updatedData.title,
+        eventType: updatedData.eventType,
+        date: updatedData.date,
+        location: updatedData.location,
+        thumbnail: updatedData.thumbnail,
+        description: updatedData.description,
+      },
+    };
+
+    const result = await db.collection("events").updateOne(filter, updateDoc);
+    res.send({ success: true, modifiedCount: result.modifiedCount });
+  
+});
+
 app.get('/users', async (req, res) => {
   const cursor = users.find();
   const allUsers = await cursor.toArray();
