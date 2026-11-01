@@ -123,6 +123,34 @@ app.get('/events', async (req, res) => {
   
 });
 
+app.get("/events/user", async (req, res) => {
+  try {
+    const email = req.query.email;
+
+    if (!email) {
+      return res.status(400).send({
+        success: false,
+        message: "Email is required.",
+      });
+    }
+
+    const userEvents = await db
+      .collection("events")
+      .find({ userEmail: email })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(userEvents);
+  } catch (error) {
+    console.error("Error fetching user events:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch events.",
+    });
+  }
+});
+
 //get single view details
 app.get('/events/:id', async (req, res) => {
   const id = req.params.id;
@@ -206,55 +234,70 @@ app.get('/joined-events', async (req, res) => {
 });
 
 // GET events by specific user 
-app.get('/events/user', async (req, res) => {
- 
-    const email = req.query.email;
-    if (!email) {
-      return res.send({ success: false, message: "Email query parameter is required." });
-    }
 
-    const userEvents = await db.collection("events").find({ userEmail: email }).toArray();
-    res.send(userEvents);
-  
-});
+
+// app.get('/my-events', async (req, res) => {
+//   try {
+//     const userEmail = req.query.email;
+
+//     if (!userEmail) {
+//       return res.status(400).send({ success: false, message: "User email is required." });
+//     }
+
+//     // Query your events collection where the creator's email matches the logged-in user
+//     // (Change 'userEmail' to 'email' if your events collection uses 'email' instead)
+//     const myCreatedEvents = await eventsCollection
+//       .find({ userEmail: userEmail }) 
+//       .sort({ eventDate: 1 })
+//       .toArray();
+
+//     res.send(myCreatedEvents);
+//   } catch (error) {
+//     console.error("Error fetching user's created events:", error);
+//     res.status(500).send({ success: false, message: "Internal server error" });
+//   }
+// });
+
+
+
 
 // PUT (Update) event data by ID
-app.put('/events/:id', async (req, res) => {
+// app.put('/events/:id', async (req, res) => {
   
-    const id = req.params.id;
-    const updatedData = req.body;
-    const filter = { _id: new ObjectId(id) };
+//     const id = req.params.id;
+//     const updatedData = req.body;
+//     const filter = { _id: new ObjectId(id) };
     
-    const updateDoc = {
-      $set: {
-        title: updatedData.title,
-        eventType: updatedData.eventType,
-        date: updatedData.date,
-        location: updatedData.location,
-        thumbnail: updatedData.thumbnail,
-        description: updatedData.description,
-      },
-    };
+//     const updateDoc = {
+//       $set: {
+//         title: updatedData.title,
+//         eventType: updatedData.eventType,
+//         date: updatedData.date,
+//         location: updatedData.location,
+//         thumbnail: updatedData.thumbnail,
+//         description: updatedData.description,
+//       },
+//     };
 
-    const result = await db.collection("events").updateOne(filter, updateDoc);
-    res.send({ success: true, modifiedCount: result.modifiedCount });
+//     const result = await db.collection("events").updateOne(filter, updateDoc);
+//     res.send({ success: true, modifiedCount: result.modifiedCount });
   
-});
+// });
 
 // delete event 
-app.delete('/events/:id', async (req, res) => {
+// app.delete('/events/:id', async (req, res) => {
   
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const result = await db.collection("events").deleteOne(query);
+//     const id = req.params.id;
+//     const query = { _id: new ObjectId(id) };
+//     const result = await db.collection("events").deleteOne(query);
 
-    if (result.deletedCount === 1) {
-      res.send({ success: true, message: "Event deleted successfully" });
-    } else {
-      res.send({ success: false, message: "Event not found" });
-    }
+//     if (result.deletedCount === 1) {
+//       res.send({ success: true, message: "Event deleted successfully" });
+//     } else {
+//       res.send({ success: false, message: "Event not found" });
+//     }
  
-});
+// });
 
 app.get('/users', async (req, res) => {
   const cursor = users.find();
