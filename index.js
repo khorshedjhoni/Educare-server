@@ -186,6 +186,37 @@ app.post("/joined-events", async (req, res) => {
   
 });
 
+// GET  all events joined 
+app.get('/joined-events', async (req, res) => {
+  
+    const userEmail = req.query.email;
+
+    if (!userEmail) {
+      return res.send({ success: false, message: "User email is required to fetch joined events." });
+    }
+
+    
+    const userJoinedEvents = await joinedEventsCollection
+      .find({ userEmail })
+      .sort({ eventDate: 1 })
+      .toArray();
+
+    res.send(userJoinedEvents);
+  
+});
+
+// GET events by specific user 
+app.get('/events/user', async (req, res) => {
+ 
+    const email = req.query.email;
+    if (!email) {
+      return res.send({ success: false, message: "Email query parameter is required." });
+    }
+
+    const userEvents = await db.collection("events").find({ userEmail: email }).toArray();
+    res.send(userEvents);
+  
+});
 
 app.get('/users', async (req, res) => {
   const cursor = users.find();
