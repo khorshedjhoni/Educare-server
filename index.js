@@ -45,6 +45,7 @@ console.log("Connected to Database:", db.databaseName);
 const users = db.collection("users")
 const galleryCollection = db.collection("gallery");
 const eventsCollection = db.collection("events");
+const joinedEventsCollection = db.collection("joinedEvents");
 
 
 
@@ -70,7 +71,7 @@ app.post('/events', async (req, res) => {
   
     const newEvent = req.body;
     
-    // Server-side validation to ensure no past date is accepted
+    
     const eventDate = new Date(newEvent.date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -104,20 +105,95 @@ app.get('/events/recent', async (req, res) => {
   
 });
 
+//upcomming-events
+
+app.get('/events', async (req, res) => {
+ 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const formattedToday = new Date().toISOString().slice(0, 10);
+
+    
+    const upcomingEvents = await eventsCollection
+      .find({ date: { $gte: formattedToday } })
+      .sort({ date: 1 })
+      .toArray();
+
+    res.send(upcomingEvents);
+  
+});
+
+//get single view details
+app.get('/events/:id', async (req, res) => {
+  const id = req.params.id;
+  const query ={_id:new ObjectId(id) };
+
+  const result = await eventsCollection.findOne(query);
+  res.send(result)
+
+})
+
+//join event
+
+app.post("/joined-events", async (req, res) => {
+ 
+    const {
+      eventId,
+      userEmail,
+      userName,
+      eventTitle,
+      eventDate,
+      location,
+      thumbnail,
+    } = req.body;
+
+    if (!userEmail) {
+      return res.status(401).send({
+        success: false,
+        message: "Please log in to join events.",
+      });
+    }
+
+    const alreadyJoined = await joinedEventsCollection.findOne({
+      eventId,
+      userEmail,
+    });
+
+    if (alreadyJoined) {
+      return res.status(400).send({
+        success: false,
+        message: "You have already joined this event!",
+      });
+    }
+
+    const joinedEvent = {
+      eventId,
+      userEmail,
+      userName,
+      eventTitle,
+      eventDate,
+      location,
+      thumbnail,
+      joinedAt: new Date(),
+    };
+
+    await joinedEventsCollection.insertOne(joinedEvent);
+
+    res.send({
+      success: true,
+      message: "You joined the event successfully!",
+    });
+  
+});
+
+
 app.get('/users', async (req, res) => {
   const cursor = users.find();
   const allUsers = await cursor.toArray();
   res.send(allUsers)
 })
 
-app.get('/users/:id', async (req, res) => {
-  const id = req.params.id;
-  const query ={_id:new ObjectId(id) };
 
-  const result = await users.findOne(query);
-  res.send(result)
-
-})
 
 app.post('/users', async (req, res) => {
   const newUser = req.body;
