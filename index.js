@@ -56,10 +56,42 @@ const verifyToken = async (req, res, next) => {
     }
 
     const JWKS = createRemoteJWKSet(
-      new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
-    );
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+);
 
-    const { payload } = await jwtVerify(token, JWKS);
+const verifyToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).send({
+        success: false,
+        message: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: process.env.CLIENT_URL,
+      audience: process.env.CLIENT_URL,
+    });
+
+    req.user = payload;
+
+    console.log("JWT verified. User email:", payload.email);
+
+    next();
+  } catch (error) {
+    console.error("JWT ERROR NAME:", error.name);
+    console.error("JWT ERROR MESSAGE:", error.message);
+
+    return res.status(403).send({
+      success: false,
+      message: "Forbidden: Invalid or expired token",
+    });
+  }
+};
 
 
 next();
