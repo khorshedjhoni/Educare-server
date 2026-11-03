@@ -72,9 +72,50 @@ const verifyToken = async (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
+    // Remove trailing slash from CLIENT_URL
+const clientUrl = process.env.CLIENT_URL.replace(/\/+$/, "");
+
+// Create JWKS URL
+const jwksUrl = `${clientUrl}/api/auth/jwks`;
+
+// Create JWKS once
+const JWKS = createRemoteJWKSet(new URL(jwksUrl));
+
+console.log("JWKS URL:", jwksUrl);
+
+const verifyToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).send({
+        success: false,
+        message: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).send({
+        success: false,
+        message: "Token missing",
+      });
+    }
+
+    // Check whether JWKS endpoint is accessible
+    const jwksResponse = await fetch(jwksUrl);
+
+    console.log("JWKS HTTP status:", jwksResponse.status);
+
+    if (!jwksResponse.ok) {
+      throw new Error(`JWKS request failed: ${jwksResponse.status}`);
+    }
+
+    // Verify JWT
     const { payload } = await jwtVerify(token, JWKS, {
-      issuer: process.env.CLIENT_URL,
-      audience: process.env.CLIENT_URL,
+      issuer: clientUrl,
+      audience: clientUrl,
     });
 
     req.user = payload;
@@ -90,14 +131,6 @@ const verifyToken = async (req, res, next) => {
       success: false,
       message: "Forbidden: Invalid or expired token",
     });
-  }
-};
-
-
-next();
-  } catch (error) {
-    console.error("JWT verification failed:", error);
-    return res.status(403).send({ success: false, message: "Forbidden: Invalid or expired token" });
   }
 };
 
