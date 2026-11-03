@@ -1,20 +1,15 @@
 console.log("EDUCARE SERVER FILE IS RUNNING");
 
 import express from "express";
-
-
-import { MongoClient,ObjectId } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
-
 import cors from "cors";
-
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
-
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -42,35 +37,58 @@ const connectedClient = await connectToMongoDB();
 const db = connectedClient.db("EducareDB");
 console.log("Connected to Database:", db.databaseName);
 
-const users = db.collection("users")
+const users = db.collection("users");
 const galleryCollection = db.collection("gallery");
 const eventsCollection = db.collection("events");
 const joinedEventsCollection = db.collection("joinedEvents");
 
+// --- 1. UPDATED VERIFY TOKEN MIDDLEWARE ---
+const verifyToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
+    }
 
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(401).send({ success: false, message: "Unauthorized: Token missing" });
+    }
 
+    const JWKS = createRemoteJWKSet(
+      new URL("http://localhost:3000/api/auth/jwks")
+    );
 
+    const { payload } = await jwtVerify(token, JWKS, {
+  issuer: "http://localhost:3000",
+  audience: "http://localhost:3000",
+});
 
+req.user = payload;
+next();
+  } catch (error) {
+    console.error("JWT verification failed:", error);
+    return res.status(403).send({ success: false, message: "Forbidden: Invalid or expired token" });
+  }
+};
 
 app.get("/", (req, res) => {
   res.send("Educare server is working!");
 });
 
-
-// Get all gallery items endpoint
+// Get all gallery items endpoint (Public)
 app.get('/gallery', async (req, res) => {
     const cursor = galleryCollection.find();
     const result = await cursor.toArray();
     res.send(result);
-  
 });
 
-//event crete
-
-app.post('/events', async (req, res) => {
-  
-    const newEvent = req.body;
-    
+// --- 2. PROTECTED: Event Create ---
+app.post('/events', verifyToken, async (req, res) => {
+    const newEvent = {
+      ...req.body,
+      userEmail: req.user.email || req.body.userEmail, // Securely grabbed from token
+    };
     
     const eventDate = new Date(newEvent.date);
     const today = new Date();
@@ -83,18 +101,13 @@ app.post('/events', async (req, res) => {
     const result = await eventsCollection.insertOne(newEvent);
     res.send({ success: true, insertedId: result.insertedId });
     console.log("New event created by:", newEvent.userEmail);
-  } 
-  
-);
+});
 
-// recent_event show
-
+// Recent events show (Public)
 app.get('/events/recent', async (req, res) => {
- 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    
     const recentEvents = await db.collection("events")
       .find({ date: { $gte: today.toISOString().split("T")[0] } })
       .sort({ date: 1 })
@@ -102,37 +115,26 @@ app.get('/events/recent', async (req, res) => {
       .toArray();
 
     res.send(recentEvents);
-  
 });
 
-//upcomming-events
-
+// Upcoming events (Public)
 app.get('/events', async (req, res) => {
- 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const formattedToday = new Date().toISOString().slice(0, 10);
 
-    
     const upcomingEvents = await eventsCollection
       .find({ date: { $gte: formattedToday } })
       .sort({ date: 1 })
       .toArray();
 
     res.send(upcomingEvents);
-  
 });
 
-app.get("/events/user", async (req, res) => {
+// --- 3. PROTECTED: Get User Events ---
+app.get("/events/user", verifyToken, async (req, res) => {
   try {
-    const email = req.query.email;
-
-   if (!email) {
-     return res.status(400).send({
-       success: false,
-       message: "Email is required.",
-     });
-   }
+    const email = req.user.email; // Grab securely from verified token
 
    const userEvents = await db
      .collection("events")
@@ -150,23 +152,19 @@ app.get("/events/user", async (req, res) => {
  }
 });
 
-//get single view details
+// Get single view details (Public - users can view details without logging in)
 app.get('/events/:id', async (req, res) => {
   const id = req.params.id;
-  const query ={_id:new ObjectId(id) };
+  const query = { _id: new ObjectId(id) };
 
   const result = await eventsCollection.findOne(query);
-  res.send(result)
+  res.send(result);
+});
 
-})
-
-//join event
-
-app.post("/joined-events", async (req, res) => {
- 
+// --- 4. PROTECTED: Join Event ---
+app.post("/joined-events", verifyToken, async (req, res) => {
     const {
       eventId,
-      userEmail,
       userName,
       eventTitle,
       eventDate,
@@ -174,12 +172,7 @@ app.post("/joined-events", async (req, res) => {
       thumbnail,
     } = req.body;
 
-    if (!userEmail) {
-      return res.status(401).send({
-        success: false,
-        message: "Please log in to join events.",
-      });
-    }
+    const userEmail = req.user.email; // Securely verified from token
 
     const alreadyJoined = await joinedEventsCollection.findOne({
       eventId,
@@ -210,39 +203,25 @@ app.post("/joined-events", async (req, res) => {
       success: true,
       message: "You joined the event successfully!",
     });
-  
 });
 
-// GET  all events joined 
-app.get('/joined-events', async (req, res) => {
-  
-    const userEmail = req.query.email;
+// --- 5. PROTECTED: Get all joined events for user ---
+app.get('/joined-events', verifyToken, async (req, res) => {
+    const userEmail = req.user.email; // Securely verified from token
 
-    if (!userEmail) {
-      return res.send({ success: false, message: "User email is required to fetch joined events." });
-    }
-
-    
     const userJoinedEvents = await joinedEventsCollection
       .find({ userEmail })
       .sort({ eventDate: 1 })
       .toArray();
 
     res.send(userJoinedEvents);
-  
 });
 
-
-
-
-
-
-// PUT (Update) event data by ID
-app.put('/events/:id', async (req, res) => {
-  
+// --- 6. PROTECTED: PUT (Update) event data by ID ---
+app.put('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
     const updatedData = req.body;
-    const filter = { _id: new ObjectId(id) };
+    const filter = { _id: new ObjectId(id), userEmail: req.user.email }; // Ensure ownership
     
     const updateDoc = {
       $set: {
@@ -257,67 +236,39 @@ app.put('/events/:id', async (req, res) => {
 
     const result = await db.collection("events").updateOne(filter, updateDoc);
     res.send({ success: true, modifiedCount: result.modifiedCount });
-  
 });
 
-// delete event 
-app.delete('/events/:id', async (req, res) => {
-  
+// --- 7. PROTECTED: Delete event ---
+app.delete('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
+    const query = { _id: new ObjectId(id), userEmail: req.user.email }; // Ensure ownership
     const result = await db.collection("events").deleteOne(query);
 
     if (result.deletedCount === 1) {
       res.send({ success: true, message: "Event deleted successfully" });
     } else {
-      res.send({ success: false, message: "Event not found" });
+      res.status(404).send({ success: false, message: "Event not found or unauthorized" });
     }
- 
 });
 
 app.get('/users', async (req, res) => {
   const cursor = users.find();
   const allUsers = await cursor.toArray();
-  res.send(allUsers)
-})
-
-
+  res.send(allUsers);
+});
 
 app.post('/users', async (req, res) => {
   const newUser = req.body;
   const result = await users.insertOne(newUser);
   res.send(result);
+  console.log('adding new user', newUser);
+});
 
-  console.log('adding new use',newUser)
-})
-
-app.delete('/users/:id', async (req, res)=>{
-    const id = req.params.id;
-  const query ={_id:new ObjectId(id) };
-
+app.delete('/users/:id', async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
   const result = await users.deleteOne(query);
-  res.send(result)
-
-})
-
-
-
-
-//gallery data get from db
-app.get("/gallery", async (req, res) => {
-  console.log("Gallery route was called!");
-
-  try {
-    const result = await galleryCollection.find().toArray();
-
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("Error fetching gallery:", error);
-
-    res.status(500).json({
-      message: "Failed to fetch gallery data",
-    });
-  }
+  res.send(result);
 });
 
 app.get("/test", (req, res) => {
