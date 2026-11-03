@@ -42,7 +42,7 @@ const galleryCollection = db.collection("gallery");
 const eventsCollection = db.collection("events");
 const joinedEventsCollection = db.collection("joinedEvents");
 
-// --- 1. UPDATED VERIFY TOKEN MIDDLEWARE ---
+
 const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -56,15 +56,12 @@ const verifyToken = async (req, res, next) => {
     }
 
     const JWKS = createRemoteJWKSet(
-      new URL("http://localhost:3000/api/auth/jwks")
+      new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
     );
 
-    const { payload } = await jwtVerify(token, JWKS, {
-  issuer: "http://localhost:3000",
-  audience: "http://localhost:3000",
-});
+    const { payload } = await jwtVerify(token, JWKS);
 
-req.user = payload;
+
 next();
   } catch (error) {
     console.error("JWT verification failed:", error);
@@ -83,7 +80,7 @@ app.get('/gallery', async (req, res) => {
     res.send(result);
 });
 
-// --- 2. PROTECTED: Event Create ---
+
 app.post('/events', verifyToken, async (req, res) => {
     const newEvent = {
       ...req.body,
@@ -103,7 +100,7 @@ app.post('/events', verifyToken, async (req, res) => {
     console.log("New event created by:", newEvent.userEmail);
 });
 
-// Recent events show (Public)
+
 app.get('/events/recent', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -117,7 +114,7 @@ app.get('/events/recent', async (req, res) => {
     res.send(recentEvents);
 });
 
-// Upcoming events (Public)
+
 app.get('/events', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -131,7 +128,7 @@ app.get('/events', async (req, res) => {
     res.send(upcomingEvents);
 });
 
-// --- 3. PROTECTED: Get User Events ---
+
 app.get("/events/user", verifyToken, async (req, res) => {
   try {
     const email = req.user.email; // Grab securely from verified token
@@ -152,7 +149,7 @@ app.get("/events/user", verifyToken, async (req, res) => {
  }
 });
 
-// Get single view details (Public - users can view details without logging in)
+
 app.get('/events/:id', async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
@@ -161,7 +158,7 @@ app.get('/events/:id', async (req, res) => {
   res.send(result);
 });
 
-// --- 4. PROTECTED: Join Event ---
+
 app.post("/joined-events", verifyToken, async (req, res) => {
     const {
       eventId,
@@ -205,9 +202,9 @@ app.post("/joined-events", verifyToken, async (req, res) => {
     });
 });
 
-// --- 5. PROTECTED: Get all joined events for user ---
+
 app.get('/joined-events', verifyToken, async (req, res) => {
-    const userEmail = req.user.email; // Securely verified from token
+    const userEmail = req.user.email; 
 
     const userJoinedEvents = await joinedEventsCollection
       .find({ userEmail })
@@ -217,11 +214,11 @@ app.get('/joined-events', verifyToken, async (req, res) => {
     res.send(userJoinedEvents);
 });
 
-// --- 6. PROTECTED: PUT (Update) event data by ID ---
+
 app.put('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
     const updatedData = req.body;
-    const filter = { _id: new ObjectId(id), userEmail: req.user.email }; // Ensure ownership
+    const filter = { _id: new ObjectId(id), userEmail: req.user.email }; // 
     
     const updateDoc = {
       $set: {
@@ -238,7 +235,7 @@ app.put('/events/:id', verifyToken, async (req, res) => {
     res.send({ success: true, modifiedCount: result.modifiedCount });
 });
 
-// --- 7. PROTECTED: Delete event ---
+
 app.delete('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
     const query = { _id: new ObjectId(id), userEmail: req.user.email }; // Ensure ownership
@@ -251,25 +248,7 @@ app.delete('/events/:id', verifyToken, async (req, res) => {
     }
 });
 
-app.get('/users', async (req, res) => {
-  const cursor = users.find();
-  const allUsers = await cursor.toArray();
-  res.send(allUsers);
-});
 
-app.post('/users', async (req, res) => {
-  const newUser = req.body;
-  const result = await users.insertOne(newUser);
-  res.send(result);
-  console.log('adding new user', newUser);
-});
-
-app.delete('/users/:id', async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
-  const result = await users.deleteOne(query);
-  res.send(result);
-});
 
 app.get("/test", (req, res) => {
   res.send("Express server is working!");
