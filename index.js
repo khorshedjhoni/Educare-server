@@ -42,20 +42,7 @@ const galleryCollection = db.collection("gallery");
 const eventsCollection = db.collection("events");
 const joinedEventsCollection = db.collection("joinedEvents");
 
-
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(401).send({ success: false, message: "Unauthorized: Token missing" });
-    }
-
-    const JWKS = createRemoteJWKSet(
+const JWKS = createRemoteJWKSet(
   new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
 );
 
@@ -71,6 +58,12 @@ const verifyToken = async (req, res, next) => {
     }
 
     const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(401).send({
+        success: false,
+        message: "Unauthorized: Token missing",
+      });
+    }
 
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: process.env.CLIENT_URL,
@@ -93,25 +86,20 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-
-
-
 app.get("/", (req, res) => {
   res.send("Educare server is working!");
 });
 
-// Get all gallery items endpoint (Public)
 app.get('/gallery', async (req, res) => {
     const cursor = galleryCollection.find();
     const result = await cursor.toArray();
     res.send(result);
 });
 
-
 app.post('/events', verifyToken, async (req, res) => {
     const newEvent = {
       ...req.body,
-      userEmail: req.user.email || req.body.userEmail, // Securely grabbed from token
+      userEmail: req.user.email || req.body.userEmail,
     };
     
     const eventDate = new Date(newEvent.date);
@@ -127,7 +115,6 @@ app.post('/events', verifyToken, async (req, res) => {
     console.log("New event created by:", newEvent.userEmail);
 });
 
-
 app.get('/events/recent', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -140,7 +127,6 @@ app.get('/events/recent', async (req, res) => {
 
     res.send(recentEvents);
 });
-
 
 app.get('/events', async (req, res) => {
     const today = new Date();
@@ -155,10 +141,9 @@ app.get('/events', async (req, res) => {
     res.send(upcomingEvents);
 });
 
-
 app.get("/events/user", verifyToken, async (req, res) => {
   try {
-    const email = req.user.email; // Grab securely from verified token
+    const email = req.user.email;
 
    const userEvents = await db
      .collection("events")
@@ -176,7 +161,6 @@ app.get("/events/user", verifyToken, async (req, res) => {
  }
 });
 
-
 app.get('/events/:id', async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
@@ -184,7 +168,6 @@ app.get('/events/:id', async (req, res) => {
   const result = await eventsCollection.findOne(query);
   res.send(result);
 });
-
 
 app.post("/joined-events", verifyToken, async (req, res) => {
     const {
@@ -196,7 +179,7 @@ app.post("/joined-events", verifyToken, async (req, res) => {
       thumbnail,
     } = req.body;
 
-    const userEmail = req.user.email; // Securely verified from token
+    const userEmail = req.user.email;
 
     const alreadyJoined = await joinedEventsCollection.findOne({
       eventId,
@@ -229,7 +212,6 @@ app.post("/joined-events", verifyToken, async (req, res) => {
     });
 });
 
-
 app.get('/joined-events', verifyToken, async (req, res) => {
     const userEmail = req.user.email; 
 
@@ -241,11 +223,10 @@ app.get('/joined-events', verifyToken, async (req, res) => {
     res.send(userJoinedEvents);
 });
 
-
 app.put('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
     const updatedData = req.body;
-    const filter = { _id: new ObjectId(id), userEmail: req.user.email }; // 
+    const filter = { _id: new ObjectId(id), userEmail: req.user.email };
     
     const updateDoc = {
       $set: {
@@ -262,10 +243,9 @@ app.put('/events/:id', verifyToken, async (req, res) => {
     res.send({ success: true, modifiedCount: result.modifiedCount });
 });
 
-
 app.delete('/events/:id', verifyToken, async (req, res) => {
     const id = req.params.id;
-    const query = { _id: new ObjectId(id), userEmail: req.user.email }; // Ensure ownership
+    const query = { _id: new ObjectId(id), userEmail: req.user.email };
     const result = await db.collection("events").deleteOne(query);
 
     if (result.deletedCount === 1) {
@@ -275,8 +255,6 @@ app.delete('/events/:id', verifyToken, async (req, res) => {
     }
 });
 
-
-
 app.get("/test", (req, res) => {
   res.send("Express server is working!");
 });
@@ -285,4 +263,4 @@ app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
 
-export default app
+export default app;
